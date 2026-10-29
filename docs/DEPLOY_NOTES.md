@@ -19,6 +19,8 @@ DB 저장 위치를 바꾸는 것(SQLite → Supabase)과 앱을 인터넷에 �
 | Start Command | `npm start` (= `node server/index.js`) |
 | 상태 확인 경로 | `/` (200) |
 
+이 설정은 저장소 루트의 [`render.yaml`](../render.yaml)(Render Blueprint)에 들어 있습니다. `SUPABASE_URL`, `SUPABASE_ANON_KEY`는 값을 비워 두었고(`sync: false`), Render 대시보드에서 직접 입력합니다.
+
 ## 3. 환경변수 (호스팅 서비스 화면에 입력)
 | 이름 | 값 | 비고 |
 |---|---|---|

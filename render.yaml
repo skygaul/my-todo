@@ -1,0 +1,22 @@
+# Render Blueprint: Render > New > Blueprint > pick this repository.
+# The two Supabase values have no value here on purpose (sync: false):
+# enter them in the Render dashboard, never in this file.
+services:
+  - type: web
+    name: my-todo
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
