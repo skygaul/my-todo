@@ -5,6 +5,8 @@
 
 > 로컬 SQLite 버전(길 A)은 Git 태그 `local-sqlite`로 남아 있습니다: `git checkout local-sqlite`
 
+배포 주소: https://my-todo-tehj.onrender.com (Render 무료 서비스: 한동안 접속이 없으면 첫 로딩이 50초 이상 걸릴 수 있음. 설정은 [render.yaml](render.yaml), 준비물은 [docs/DEPLOY_NOTES.md](docs/DEPLOY_NOTES.md))
+
 ## 실행
 
 1. Supabase 프로젝트를 만들고 `supabase/schema.sql`을 SQL Editor에서 실행합니다.
