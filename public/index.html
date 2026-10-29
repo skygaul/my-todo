@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Todo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <section>
+        <h2>보기</h2>
+        <label class="today-toggle">
+          <input id="today" type="checkbox"> 오늘 할 일만 보기
+        </label>
+      </section>
+
+      <section>
+        <h2>카테고리</h2>
+        <ul id="cat-list" aria-label="카테고리 목록"></ul>
+        <form id="cat-form" autocomplete="off">
+          <input id="cat-name" type="text" placeholder="새 카테고리" maxlength="30">
+          <button type="submit">추가</button>
+        </form>
+      </section>
+    </aside>
+
+    <main>
+      <h1>My Todo</h1>
+
+      <form id="add-form" autocomplete="off">
+        <input id="title" type="text" placeholder="할 일을 입력하세요" maxlength="200" required>
+        <input id="due" type="date" aria-label="마감일">
+        <select id="cat" aria-label="카테고리"></select>
+        <button type="submit">추가</button>
+      </form>
+
+      <p id="msg" role="status"></p>
+      <p id="filter-note" hidden></p>
+      <ul id="list"></ul>
+      <p id="empty" hidden>표시할 할 일이 없습니다.</p>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
