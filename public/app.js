@@ -13,8 +13,26 @@ async function api(path, options = {}) {
   });
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && !path.startsWith('/auth/')) showLogin();
   if (!res.ok) throw new Error(data.error || '요청에 실패했습니다.');
   return data;
+}
+
+function showLogin() {
+  $('app').hidden = true;
+  $('auth').hidden = false;
+}
+
+function showApp(email) {
+  $('auth').hidden = true;
+  $('app').hidden = false;
+  $('user-email').textContent = email;
+}
+
+function authMsg(text, ok = false) {
+  const el = $('auth-msg');
+  el.textContent = text;
+  el.className = ok ? 'ok' : '';
 }
 
 function showMsg(text, ok = false) {
@@ -207,9 +225,48 @@ $('cat-form').addEventListener('submit', async (ev) => {
 
 $('today').addEventListener('change', () => loadTodos().catch(showError));
 
-(async () => {
+async function enterApp(email) {
+  filterCat = '';
+  $('today').checked = false;
+  showApp(email);
   try {
     await loadCategories();
     await loadTodos();
   } catch (e) { showError(e); }
+}
+
+async function submitAuth(kind) {
+  const form = $('auth-form');
+  if (!form.reportValidity()) return;
+  authMsg('');
+  try {
+    const result = await api(`/auth/${kind}`, {
+      method: 'POST',
+      body: { email: $('auth-email').value, password: $('auth-password').value },
+    });
+    if (result.needsConfirm) return authMsg(result.message, true);
+    $('auth-password').value = '';
+    await enterApp(result.email);
+  } catch (e) {
+    authMsg(e instanceof TypeError ? '서버에 연결할 수 없습니다. 터미널에서 npm start 로 서버를 켰는지 확인하세요.' : e.message);
+  }
+}
+
+$('auth-form').addEventListener('submit', (ev) => { ev.preventDefault(); submitAuth('login'); });
+$('signup-btn').addEventListener('click', () => submitAuth('signup'));
+
+$('logout').addEventListener('click', async () => {
+  try { await api('/auth/logout', { method: 'POST' }); } catch (e) { showError(e); }
+  listEl.replaceChildren();
+  showLogin();
+});
+
+(async () => {
+  try {
+    const me = await api('/auth/me');
+    await enterApp(me.email);
+  } catch (e) {
+    showLogin();
+    if (e instanceof TypeError) authMsg('서버에 연결할 수 없습니다. 터미널에서 npm start 로 서버를 켰는지 확인하세요.');
+  }
 })();

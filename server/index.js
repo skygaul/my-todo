@@ -1,17 +1,21 @@
 require('dotenv').config();
 const path = require('path');
 const express = require('express');
+const cookieParser = require('cookie-parser');
 
-require('./db');
+require('./supabase');
+const { requireUser } = require('./auth');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-app.use('/api/todos', require('./routes/todos'));
-app.use('/api/categories', require('./routes/categories'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/todos', requireUser, require('./routes/todos'));
+app.use('/api/categories', requireUser, require('./routes/categories'));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 

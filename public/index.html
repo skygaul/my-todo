@@ -7,7 +7,21 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="layout">
+  <section id="auth" class="auth-card" hidden>
+    <h1>My Todo</h1>
+    <p class="auth-sub">로그인하고 내 할 일을 관리하세요</p>
+    <form id="auth-form">
+      <input id="auth-email" type="email" placeholder="이메일" autocomplete="email" required>
+      <input id="auth-password" type="password" placeholder="비밀번호 (8자 이상)" autocomplete="current-password" minlength="8" required>
+      <div class="auth-actions">
+        <button type="submit" id="login-btn">로그인</button>
+        <button type="button" id="signup-btn" class="secondary">가입</button>
+      </div>
+    </form>
+    <p id="auth-msg" role="status"></p>
+  </section>
+
+  <div class="layout" id="app" hidden>
     <aside class="sidebar">
       <section>
         <h2>보기</h2>
@@ -23,6 +37,11 @@
           <input id="cat-name" type="text" placeholder="새 카테고리" maxlength="30">
           <button type="submit">추가</button>
         </form>
+      </section>
+
+      <section class="userbar">
+        <span id="user-email"></span>
+        <button id="logout" type="button" class="secondary">로그아웃</button>
       </section>
     </aside>
 

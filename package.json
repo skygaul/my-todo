@@ -1,13 +1,16 @@
 {
   "name": "my-todo",
   "version": "1.0.0",
-  "description": "Local Todo app (Express + SQLite)",
+  "description": "Todo app (Express + Supabase)",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "verify:rls": "node scripts/verify-rls.js"
   },
   "license": "MIT",
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^18.0.9",
     "express": "^5.3.0"
   }

@@ -1,9 +1,14 @@
 const express = require('express');
-const db = require('../db');
 
 const router = express.Router();
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const COLUMNS = 'id, title, is_done, due_date, category_id, created_at, completed_at';
+
+function formatLocal(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 function validDate(s) {
   if (typeof s !== 'string' || !DATE_RE.test(s)) return false;
@@ -11,116 +16,116 @@ function validDate(s) {
   return !Number.isNaN(d.getTime()) && formatLocal(d) === s;
 }
 
-function formatLocal(d) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+// The database only stores category_id; attach the name/color for the screen.
+async function withCategories(db, rows) {
+  const { data, error } = await db.from('categories').select('id, name, color');
+  if (error) throw error;
+  const byId = new Map(data.map((c) => [c.id, c]));
+  return rows.map((t) => ({
+    ...t,
+    category_name: byId.get(t.category_id)?.name ?? null,
+    category_color: byId.get(t.category_id)?.color ?? null,
+  }));
 }
 
-const SELECT = `
-  SELECT t.id, t.title, t.is_done, t.due_date, t.category_id,
-         c.name AS category_name, c.color AS category_color,
-         t.created_at, t.completed_at
-  FROM todos t
-  LEFT JOIN categories c ON c.id = t.category_id
-`;
-
-function getOne(id) {
-  return db.prepare(`${SELECT} WHERE t.id = ?`).get(id);
+function parseCategoryId(value) {
+  if (value === undefined || value === null || value === '') return { value: null };
+  const n = Number(value);
+  return Number.isInteger(n) ? { value: n } : { error: true };
 }
 
-function categoryExists(id) {
-  return !!db.prepare('SELECT 1 FROM categories WHERE id = ?').get(id);
-}
+router.get('/', async (req, res) => {
+  let q = req.db.from('todos').select(COLUMNS)
+    .order('is_done', { ascending: true })
+    .order('due_date', { ascending: true, nullsFirst: false })
+    .order('id', { ascending: false });
 
-router.get('/', (req, res) => {
-  const where = [];
-  const params = [];
+  if (req.query.today === '1') q = q.eq('due_date', formatLocal(new Date())).eq('is_done', false);
 
-  if (req.query.today === '1') {
-    where.push("t.due_date = date('now', 'localtime') AND t.is_done = 0");
-  }
-  if (req.query.category_id !== undefined && req.query.category_id !== '') {
-    if (req.query.category_id === 'none') {
-      where.push('t.category_id IS NULL');
+  const cat = req.query.category_id;
+  if (cat !== undefined && cat !== '') {
+    if (cat === 'none') {
+      q = q.is('category_id', null);
     } else {
-      const cid = Number(req.query.category_id);
+      const cid = Number(cat);
       if (!Number.isInteger(cid)) return res.status(400).json({ error: 'category_id가 올바르지 않습니다.' });
-      where.push('t.category_id = ?');
-      params.push(cid);
+      q = q.eq('category_id', cid);
     }
   }
 
-  const sql = `${SELECT} ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-    ORDER BY t.is_done ASC, (t.due_date IS NULL) ASC, t.due_date ASC, t.id DESC`;
-  res.json(db.prepare(sql).all(...params));
+  const { data, error } = await q;
+  if (error) throw error;
+  res.json(await withCategories(req.db, data));
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
   if (!title) return res.status(400).json({ error: '제목이 필요합니다.' });
   if (title.length > 200) return res.status(400).json({ error: '제목은 200자 이하여야 합니다.' });
 
-  let due = req.body.due_date || null;
+  const due = req.body.due_date || null;
   if (due !== null && !validDate(due)) return res.status(400).json({ error: '마감일 형식은 YYYY-MM-DD 입니다.' });
 
-  let cid = req.body.category_id ?? null;
-  if (cid === '') cid = null;
-  if (cid !== null) {
-    cid = Number(cid);
-    if (!Number.isInteger(cid) || !categoryExists(cid)) {
-      return res.status(400).json({ error: '존재하지 않는 카테고리입니다.' });
-    }
-  }
+  const cid = parseCategoryId(req.body.category_id);
+  if (cid.error) return res.status(400).json({ error: '존재하지 않는 카테고리입니다.' });
 
-  const info = db.prepare('INSERT INTO todos (title, due_date, category_id) VALUES (?, ?, ?)').run(title, due, cid);
-  res.status(201).json(getOne(Number(info.lastInsertRowid)));
+  // user_id is filled by the database (auth.uid()); never taken from the request.
+  const { data, error } = await req.db.from('todos')
+    .insert({ title, due_date: due, category_id: cid.value }).select(COLUMNS).single();
+  if (error) {
+    if (error.code === '23503') return res.status(400).json({ error: '존재하지 않는 카테고리입니다.' });
+    throw error;
+  }
+  res.status(201).json((await withCategories(req.db, [data]))[0]);
 });
 
-router.patch('/:id', (req, res) => {
+router.patch('/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const current = getOne(id);
-  if (!current) return res.status(404).json({ error: '할 일을 찾을 수 없습니다.' });
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'id가 올바르지 않습니다.' });
 
-  const sets = [];
-  const params = [];
   const b = req.body;
+  const patch = {};
 
   if (b.title !== undefined) {
     const title = typeof b.title === 'string' ? b.title.trim() : '';
     if (!title || title.length > 200) return res.status(400).json({ error: '제목이 올바르지 않습니다.' });
-    sets.push('title = ?'); params.push(title);
+    patch.title = title;
   }
   if (b.is_done !== undefined) {
-    const done = b.is_done === true || b.is_done === 1 ? 1 : b.is_done === false || b.is_done === 0 ? 0 : null;
+    const done = b.is_done === true || b.is_done === 1 ? true : b.is_done === false || b.is_done === 0 ? false : null;
     if (done === null) return res.status(400).json({ error: 'is_done은 true/false 여야 합니다.' });
-    sets.push('is_done = ?'); params.push(done);
-    sets.push(done ? "completed_at = datetime('now', 'localtime')" : 'completed_at = NULL');
+    patch.is_done = done;
+    patch.completed_at = done ? new Date().toISOString() : null;
   }
   if (b.due_date !== undefined) {
     const due = b.due_date || null;
     if (due !== null && !validDate(due)) return res.status(400).json({ error: '마감일 형식은 YYYY-MM-DD 입니다.' });
-    sets.push('due_date = ?'); params.push(due);
+    patch.due_date = due;
   }
   if (b.category_id !== undefined) {
-    let cid = b.category_id === '' ? null : b.category_id;
-    if (cid !== null) {
-      cid = Number(cid);
-      if (!Number.isInteger(cid) || !categoryExists(cid)) {
-        return res.status(400).json({ error: '존재하지 않는 카테고리입니다.' });
-      }
-    }
-    sets.push('category_id = ?'); params.push(cid);
+    const cid = parseCategoryId(b.category_id);
+    if (cid.error) return res.status(400).json({ error: '존재하지 않는 카테고리입니다.' });
+    patch.category_id = cid.value;
   }
+  if (!Object.keys(patch).length) return res.status(400).json({ error: '변경할 값이 없습니다.' });
 
-  if (!sets.length) return res.status(400).json({ error: '변경할 값이 없습니다.' });
-
-  db.prepare(`UPDATE todos SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
-  res.json(getOne(id));
+  const { data, error } = await req.db.from('todos').update(patch).eq('id', id).select(COLUMNS);
+  if (error) {
+    if (error.code === '23503') return res.status(400).json({ error: '존재하지 않는 카테고리입니다.' });
+    throw error;
+  }
+  // RLS hides other users' rows, so "not yours" and "not found" look the same.
+  if (!data.length) return res.status(404).json({ error: '할 일을 찾을 수 없습니다.' });
+  res.json((await withCategories(req.db, data))[0]);
 });
 
-router.delete('/:id', (req, res) => {
-  const info = db.prepare('DELETE FROM todos WHERE id = ?').run(Number(req.params.id));
-  if (info.changes === 0) return res.status(404).json({ error: '할 일을 찾을 수 없습니다.' });
+router.delete('/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'id가 올바르지 않습니다.' });
+
+  const { data, error } = await req.db.from('todos').delete().eq('id', id).select('id');
+  if (error) throw error;
+  if (!data.length) return res.status(404).json({ error: '할 일을 찾을 수 없습니다.' });
   res.status(204).end();
 });
 
