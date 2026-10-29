@@ -5,19 +5,54 @@ require('dotenv').config();
 const readline = require('readline');
 const { authClient, userClient } = require('../server/supabase');
 
-function ask(question, { hidden = false } = {}) {
+function ask(question) {
   return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    if (hidden) {
-      rl._writeToOutput = (s) => {
-        if (s.includes(question) || /[\r\n]/.test(s)) process.stdout.write(s);
-      };
-    }
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     rl.question(question, (answer) => {
       rl.close();
-      if (hidden) process.stdout.write('\n');
       resolve(answer.trim());
     });
+  });
+}
+
+// Reads a password without showing it: prints one * per character.
+function askHidden(question) {
+  return new Promise((resolve) => {
+    if (!process.stdin.isTTY) return resolve(ask(question));
+    process.stdout.write(question);
+    let value = '';
+    readline.emitKeypressEvents(process.stdin);
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    const cleanup = () => {
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      process.stdin.removeListener('keypress', onKey);
+    };
+    function onKey(str, key) {
+      if (key && key.ctrl && key.name === 'c') {
+        cleanup();
+        process.stdout.write('\n');
+        process.exit(130);
+      }
+      if (key && (key.name === 'return' || key.name === 'enter')) {
+        cleanup();
+        process.stdout.write('\n');
+        return resolve(value);
+      }
+      if (key && key.name === 'backspace') {
+        if (value) {
+          value = value.slice(0, -1);
+          process.stdout.write('\b \b');
+        }
+        return;
+      }
+      if (str && !(key && (key.ctrl || key.meta)) && str >= ' ') {
+        value += str;
+        process.stdout.write('*');
+      }
+    }
+    process.stdin.on('keypress', onKey);
   });
 }
 
@@ -28,8 +63,10 @@ function check(name, ok, detail = '') {
 }
 
 async function login(label) {
-  const email = await ask(`계정 ${label} 이메일: `);
-  const password = await ask(`계정 ${label} 비밀번호: `, { hidden: true });
+  // Preferred: the values arrive as environment variables of this one process
+  // (see README). Otherwise fall back to typing them here.
+  const email = process.env[`RLS_${label}_EMAIL`] || (await ask(`계정 ${label} 이메일: `));
+  const password = process.env[`RLS_${label}_PASSWORD`] || (await askHidden(`계정 ${label} 비밀번호: `));
   const { data, error } = await authClient().auth.signInWithPassword({ email, password });
   if (error || !data.session) throw new Error(`계정 ${label} 로그인 실패: ${error?.message ?? 'no session'}`);
   return { user: data.user, db: userClient(data.session.access_token) };

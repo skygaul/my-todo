@@ -8,6 +8,9 @@
     "verify:rls": "node scripts/verify-rls.js"
   },
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
     "cookie-parser": "^1.4.7",
