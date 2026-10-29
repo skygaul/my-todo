@@ -4,3 +4,4 @@ todo.db
 todo.db-journal
 todo.db-wal
 todo.db-shm
+local-demo/
